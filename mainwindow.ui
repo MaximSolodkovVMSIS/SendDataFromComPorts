@@ -131,7 +131,17 @@
      <rect>
       <x>110</x>
       <y>510</y>
-      <width>891</width>
+      <width>431</width>
+      <height>131</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QTextEdit" name="textEdit2">
+    <property name="geometry">
+     <rect>
+      <x>570</x>
+      <y>510</y>
+      <width>431</width>
       <height>131</height>
      </rect>
     </property>
