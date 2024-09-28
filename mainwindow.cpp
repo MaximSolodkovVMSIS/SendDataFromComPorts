@@ -194,7 +194,7 @@ void MainWindow::sendDataFromPort1() {
 
     QByteArray stuffedData = applyByteStuffing(data);
 
-    char groupName = 3;
+    char groupName = 19;
     QByteArray flag = QByteArray::fromStdString("$" + std::string(1, 'a' + groupName));
     QByteArray destinationAddress(2, 0);
     QByteArray sourceAddress = QByteArray::number(1);
@@ -261,7 +261,7 @@ void MainWindow::sendDataFromPort2() {
 
     QByteArray stuffedData = applyByteStuffing(data);
 
-    char groupName = 3;
+    char groupName = 19;
     QByteArray flag = QByteArray::fromStdString("$" + std::string(1, 'a' + groupName));
     QByteArray destinationAddress(2, 0);
     QByteArray sourceAddress = QByteArray::number(1);
