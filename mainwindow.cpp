@@ -259,6 +259,8 @@ void MainWindow::sendDataFromPort2() {
     QString text = ui->textEditInput2->toPlainText();
     QByteArray data = text.toUtf8();
 
+    QByteArray stuffedData = applyByteStuffing(data);
+
     char groupName = 3;
     QByteArray flag = QByteArray::fromStdString("$" + std::string(1, 'a' + groupName));
     QByteArray destinationAddress(2, 0);
@@ -271,34 +273,44 @@ void MainWindow::sendDataFromPort2() {
     packet.append(destinationAddress);
     packet.append(sourceAddress);
     packet.append(otherFields);
-    packet.append(data);
+    packet.append(stuffedData);
     packet.append(fcs);
 
     int byteCount = packet.size();
 
-    // Отправка данных
     if (serialPort2->isOpen()) {
-        serialPort2->write(data);
+        serialPort2->write(packet);
         serialPort2->waitForBytesWritten(10);
     }
+
+    QString byteInfoBefore = QString("Данные до байт-стаффинга: \"%1\"\n"
+                                     "Байты: %2")
+                                 .arg(QString(data))
+                                 .arg(QString(data.toHex(' ')));
+
+    QString byteInfoAfter = QString("Данные после байт-стаффинга: \"%1\"\n"
+                                    "Байты: %2")
+                                .arg(QString(stuffedData))
+                                .arg(QString(stuffedData.toHex(' ')));
 
     QString packetInfo = QString("Пакет для отправки:\n"
                                  "Флаг: \"%1\"\n"
                                  "Адрес назначения: %2\n"
                                  "Адрес источника: %3\n"
                                  "Прочие поля: %4\n"
-                                 "Данные: \"%5\" (в байтах: %6)\n"
-                                 "FCS: %7\n"
-                                 "Общий размер пакета: %8 байт")
+                                 "Данные: \"%5\"\n"
+                                 "FCS: %6\n"
+                                 "Общий размер пакета: %7 байт")
                              .arg(QString(flag))
-                             .arg(QString(destinationAddress.toHex(' ')))  // Выводим адрес назначения в виде hex
-                             .arg(QString(sourceAddress.toHex(' ')))  // Адрес источника в hex
-                             .arg(QString(otherFields.toHex(' ')))  // Прочие поля
-                             .arg(QString(data))  // Текстовые данные
-                             .arg(data.size())  // Размер данных
-                             .arg(QString(fcs.toHex(' ')))  // FCS в hex
-                             .arg(byteCount);  // Общий размер пакета
+                             .arg(QString(destinationAddress.toHex(' ')))
+                             .arg(QString(sourceAddress.toHex(' ')))
+                             .arg(QString(otherFields.toHex(' ')))
+                             .arg(QString(stuffedData.toHex(' ')))
+                             .arg(QString(fcs.toHex(' ')))
+                             .arg(byteCount);
 
+    ui->textEdit->append(byteInfoBefore);
+    ui->textEdit->append(byteInfoAfter);
     ui->textEdit->append(packetInfo);
 }
 
