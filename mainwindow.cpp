@@ -3,6 +3,7 @@
 #include <QtSerialPort/QSerialPortInfo>
 #include <QSerialPort>
 #include <QTimer>
+#include <cstdlib>
 
 QSerialPort *serialPort1;
 QSerialPort *serialPort2;
@@ -53,6 +54,38 @@ void MainWindow::updateComPortList(QComboBox *comboBoxComPort1, QComboBox *combo
         comboBoxComPort2->setEnabled(true);
     }
 }
+
+unsigned char calculateCRC(const QByteArray& data) {
+    unsigned char crc = 0x00;  // Начальное значение CRC
+    unsigned char polynomial = 0x07;  // Полином для CRC-8    x^8 + x^2 + x + 1 = 0x07
+
+    for (int i = 0; i < data.size(); ++i) {
+        crc ^= static_cast<unsigned char>(data[i]);  // XOR текущий байт с CRC
+
+        for (int j = 0; j < 8; ++j) {
+            if (crc & 0x80) {
+                crc = (crc << 1) ^ polynomial;  // Сдвиг влево и XOR с полиномом
+            } else {
+                crc <<= 1;  // Просто сдвиг влево
+            }
+        }
+    }
+
+    return crc;
+}
+
+// Функция для искажения одного случайного бита
+void introduceRandomError(QByteArray& data) {
+    int probability = rand() % 100;  // Генерация случайного числа от 0 до 99
+
+    if (probability < 70) {  // 70% вероятность искажения
+        int randomByteIndex = rand() % data.size();  // Случайный байт
+        int randomBitIndex = rand() % 8;  // Случайный бит в этом байте
+
+        data[randomByteIndex] ^= (1 << randomBitIndex);  // Инвертируем выбранный бит
+    }
+}
+
 
 void MainWindow::populateParityOptions(QComboBox *comboBoxParity) {
     comboBoxParity->clear();
@@ -151,14 +184,15 @@ void MainWindow::readDataFromPort1() {
     }
 }
 
-
-
 void MainWindow::readDataFromPort2() {
     if (serialPort2->isOpen()) {
         QByteArray stuffedData = serialPort2->readAll();
 
         if (!stuffedData.isEmpty()) {
-            ui->textEditOutput1->clear();
+            ui->textEditOutput2->clear();
+
+            // Искажаем данные с вероятностью 70%
+            introduceRandomError(stuffedData);
 
             QList<int> modifiedIndices;
             QByteArray unstuffedData = removeByteStuffing(stuffedData, modifiedIndices);
@@ -176,6 +210,26 @@ void MainWindow::readDataFromPort2() {
 
             QString unstuffedFrameInfo = QString("Кадр после дебайт-стаффинга: %1").arg(QString(unstuffedData));
             ui->textEditOutput2->append(unstuffedFrameInfo);
+
+            // Получаем последнее значение как FCS
+            unsigned char receivedFCS = stuffedData.right(1)[0];
+            unstuffedData.chop(1);  // Убираем FCS из данных для корректной проверки
+
+            // Рассчитываем FCS для поля Data
+            unsigned char calculatedFCS = calculateCRC(unstuffedData);
+
+            QString fcsInfo = QString("Полученное FCS: %1\nРассчитанное FCS: %2")
+                                  .arg(QString::number(receivedFCS, 16))
+                                  .arg(QString::number(calculatedFCS, 16));
+
+            ui->textEditOutput2->append(fcsInfo);
+
+            // Проверяем FCS
+            if (receivedFCS == calculatedFCS) {
+                ui->textEditOutput2->append("FCS совпадает, данные корректны.");
+            } else {
+                ui->textEditOutput2->append("Ошибка FCS, данные повреждены.");
+            }
         }
     }
 }
@@ -192,22 +246,28 @@ void MainWindow::sendDataFromPort1() {
     QString text = ui->textEditInput1->toPlainText();
     QByteArray data = text.toUtf8();
 
+    // Применяем байт-стаффинг к данным
     QByteArray stuffedData = applyByteStuffing(data);
 
+    // Рассчитываем FCS для поля Data
+    unsigned char fcsValue = calculateCRC(stuffedData);
+    QByteArray fcs(1, fcsValue);  // Добавляем FCS (1 байт для CRC-8)
+
+    // Пакет данных (включаем поля: флаг, адреса, данные, FCS)
     char groupName = 19;
     QByteArray flag = QByteArray::fromStdString("$" + std::string(1, 'a' + groupName));
-    QByteArray destinationAddress(2, 0);
-    QByteArray sourceAddress = QByteArray::number(1);
-    QByteArray otherFields(2, 0);
-    QByteArray fcs(2, 0);
+    QByteArray destinationAddress(2, 0);  // Адрес назначения
+    QByteArray sourceAddress = QByteArray::number(1);  // Адрес источника
+    QByteArray otherFields(2, 0);  // Прочие поля
 
+    // Собираем пакет с данными
     QByteArray packet;
     packet.append(flag);
     packet.append(destinationAddress);
     packet.append(sourceAddress);
     packet.append(otherFields);
-    packet.append(stuffedData);
-    packet.append(fcs);
+    packet.append(stuffedData);  // Добавляем данные после байт-стаффинга
+    packet.append(fcs);  // Добавляем FCS
 
     int byteCount = packet.size();
 
@@ -216,36 +276,15 @@ void MainWindow::sendDataFromPort1() {
         serialPort1->waitForBytesWritten(10);
     }
 
-    QString byteInfoBefore = QString("Данные до байт-стаффинга: \"%1\"\n"
-                                     "Байты: %2")
-                                 .arg(QString(data))
-                                 .arg(QString(data.toHex(' ')));
+    // Визуализация пакета для отправки
+    QString packetInfo = QString("Пакет для отправки:\n");
+    for (int i = 0; i < packet.size(); ++i) {
+        packetInfo += QString("%1 ").arg(QString::number(static_cast<unsigned char>(packet[i]), 16).rightJustified(2, '0'));
+    }
 
-    QString byteInfoAfter = QString("Данные после байт-стаффинга: \"%1\"\n"
-                                    "Байты: %2")
-                                .arg(QString(stuffedData))
-                                .arg(QString(stuffedData.toHex(' ')));
-
-    QString packetInfo = QString("Пакет для отправки:\n"
-                                 "Флаг: \"%1\"\n"
-                                 "Адрес назначения: %2\n"
-                                 "Адрес источника: %3\n"
-                                 "Прочие поля: %4\n"
-                                 "Данные: \"%5\"\n"
-                                 "FCS: %6\n"
-                                 "Общий размер пакета: %7 байт")
-                             .arg(QString(flag))
-                             .arg(QString(destinationAddress.toHex(' ')))
-                             .arg(QString(sourceAddress.toHex(' ')))
-                             .arg(QString(otherFields.toHex(' ')))
-                             .arg(QString(stuffedData.toHex(' ')))
-                             .arg(QString(fcs.toHex(' ')))
-                             .arg(byteCount);
-
-    ui->textEdit2->append(byteInfoBefore);
-    ui->textEdit2->append(byteInfoAfter);
     ui->textEdit2->append(packetInfo);
 }
+
 
 
 

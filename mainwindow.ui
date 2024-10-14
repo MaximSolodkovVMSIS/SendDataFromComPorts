@@ -20,7 +20,7 @@
       <x>110</x>
       <y>50</y>
       <width>891</width>
-      <height>429</height>
+      <height>391</height>
      </rect>
     </property>
     <layout class="QGridLayout" name="gridLayout">
@@ -130,9 +130,9 @@
     <property name="geometry">
      <rect>
       <x>110</x>
-      <y>510</y>
+      <y>460</y>
       <width>431</width>
-      <height>131</height>
+      <height>201</height>
      </rect>
     </property>
    </widget>
@@ -140,9 +140,9 @@
     <property name="geometry">
      <rect>
       <x>570</x>
-      <y>510</y>
+      <y>460</y>
       <width>431</width>
-      <height>131</height>
+      <height>201</height>
      </rect>
     </property>
    </widget>
